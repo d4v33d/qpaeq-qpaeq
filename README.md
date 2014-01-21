@@ -14,6 +14,7 @@ REQUIRES:
 - python-rtmidi
 
 SOME UBUNTU COMMANDS:
+
 	sudo add-apt-repository ppa:webupd8team/pulseaudio-eq
 	sudo apt-get update
 
