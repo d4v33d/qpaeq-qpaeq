@@ -15,6 +15,12 @@
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import logging
+import sys
+import time
+
+import rtmidi
+from rtmidi.midiutil import open_midiport
 
 import os,math,sys
 try:
@@ -531,6 +537,24 @@ class ValueLabel(SliderLabel):
         self.setText("%.1f"%(self.slider.value()*10.0/NORM_GRANULARITY))
 
 
+
+####################################################################################
+####################################################################################
+class MidiInputHandler(object):
+    def __init__(self, port):
+        self.port = port
+        self._wallclock = time.time()
+
+    def __call__(self, event, data=None):
+        message, deltatime = event
+        self._wallclock += deltatime
+        print("[%s] @%0.6f %r" % (self.port, self._wallclock, message))
+####################################################################################
+####################################################################################
+
+
+
+
 #until there are server side state savings, do it in the client but try and avoid
 #simulaneous broadcasting situations
 class FilterState(QtCore.QObject):
@@ -635,16 +659,41 @@ def subdivide(xs, t_points):
 import optparse
 options = None
 def main():
+	
+	log = logging.getLogger('test_midiin_callback')
+	logging.basicConfig(level=logging.DEBUG)
+	port = sys.argv[1] if len(sys.argv) > 1 else None
 
-    parser = optparse.OptionParser()
-    parser.add_option("-d", "--debug", action="store_true", dest="debug")
-    global options
-    options, args = parser.parse_args(sys.argv)
-    dbus.mainloop.qt.DBusQtMainLoop(set_as_default=True)
-    app=QtGui.QApplication(args)
-    qpaeq_main=QPaeq()
-    qpaeq_main.show()
-    sys.exit(app.exec_())
+	try:
+		midiin, port_name = open_midiport(port)
+	except (EOFError, KeyboardInterrupt):
+		sys.exit()
+
+	print("Attaching MIDI input callback handler.")
+	midiin.set_callback(MidiInputHandler(port_name))
+
+	print("Entering main loop. Press Control-C to exit.")
+	try:
+		# just wait for keyboard interrupt in main thread
+		while True:
+			time.sleep(1)
+			parser = optparse.OptionParser()
+			parser.add_option("-d", "--debug", action="store_true", dest="debug")
+			global options
+			##############
+			options, args = parser.parse_args(sys.argv)
+			dbus.mainloop.qt.DBusQtMainLoop(set_as_default=True)
+			app=QtGui.QApplication(args)
+			qpaeq_main=QPaeq()
+			qpaeq_main.show()
+			sys.exit(app.exec_())
+	except KeyboardInterrupt:
+		print('')
+	finally:
+		print("Exit.")
+		midiin.close_port()
+		del midiin
+    
 
 if __name__=='__main__':
     main()
